@@ -1,6 +1,6 @@
 /**
  * Build index.html (web / serverless version) from the claude.ai version of the DALI page.
- *   node scripts/build-page.js scripts/claude-ai-index.html
+ *   node scripts/build-page.js scripts/claude-ai-index.html [선택: 저장소 맨 위 실행용 사본 경로]
  */
 "use strict";
 const fs = require("fs");
@@ -38,3 +38,17 @@ for (const [from, to] of [
 ]) rep(from, to);
 fs.writeFileSync(path.join(__dirname, "..", "index.html"), s);
 console.log("wrote index.html (" + Math.round(s.length / 1024) + " KB)");
+
+// Repository-root copy: lets https://<계정>.github.io/<저장소>/ open DALI directly (no /dali-web/ in the address).
+// Same page; only the script paths point into dali-web/. Written only when a second path is given.
+const rootOut = process.argv[3];
+if (rootOut) {
+let r = s;
+for (const f of ["data/dali-data.js", "mock-claude.js", "runtime.js", "law-api.js"]) {
+  if (!r.includes(`<script src="${f}"></script>`)) { console.error("build-page: script tag not found: " + f); process.exit(1); }
+  r = r.replace(`<script src="${f}"></script>`, `<script src="dali-web/${f}"></script>`);
+}
+r = r.replace("<head>", "<head>\n<!-- 저장소 맨 위 실행용 사본: dali-web/scripts/build-page.js가 dali-web/index.html과 함께 만듭니다. 직접 고치지 마세요. -->");
+fs.writeFileSync(rootOut, r);
+console.log("wrote " + rootOut + " (root copy)");
+}

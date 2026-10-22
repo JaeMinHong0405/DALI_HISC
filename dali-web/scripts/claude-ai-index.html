@@ -645,9 +645,9 @@ function buildIndex(){
   const avg = docs.reduce((s,d)=>s+d.len,0) / Math.max(1,docs.length);
   S.index = { docs, df, avg, N: docs.length };
 }
-function search(query, {filter, k=8}={}){
+function search(query, {filter, k=8, stop}={}){
   if(!S.index || !S.index.N) return [];
-  const { docs, df, avg, N } = S.index; const q = [...new Set(toks(query))];
+  const { docs, df, avg, N } = S.index; const q = [...new Set(toks(query))].filter(t => !stop || !stop.has(t));
   const k1 = 1.2, b = 0.75, res = [];
   for(const d of docs){
     if(filter && !filter(d.a)) continue;
@@ -658,6 +658,79 @@ function search(query, {filter, k=8}={}){
   return res.sort((x,y)=>y.s-x.s).slice(0,k);
 }
 const docOf = id => S.docs.find(d => d.id === id);
+
+/* ---------- scoped retrieval ----------
+   한국어 질문의 2글자 조각과 영어 확장 키워드를 한 번에 섞어 검색하면 점수 척도가 달라
+   해외 조문이 국내 질문을 밀어내거나 엉뚱한 조문이 올라온다. 그래서
+   ① 질문에서 관할(한국·미국·EU·UAE)과 법령 약칭을 찾고
+   ② 한국 조문은 한국어 질문+한국어 키워드로, 해외 조문은 영어 키워드로 따로 검색한 뒤
+   ③ 관할에 맞춰 자리를 나누고, 1위 대비 점수가 너무 낮은 조문은 버린다. */
+const JUR = [
+  ["한국", /국내|한국|우리나라|금융위|금감원|금융감독원|특금법|자본시장법|가상자산\s*(?:이용자\s*보호|법)|이용자\s*보호법|전자증권|토큰증권|원화/],
+  ["미국", /미국|\bU\.?S\.?\b|\bSEC\b|CFTC|GENIUS|\bOCC\b|FinCEN|연방/i],
+  ["EU", /\bEU\b|유럽|MiCA|ESMA|\bEBA\b/i],
+  ["UAE", /UAE|아랍에미리트|두바이|아부다비|ADGM|VARA|FSRA|DIFC/i],
+];
+const LAWALIAS = [
+  [/특금법|특정\s*금융/, /특정 금융거래정보/, "특정 금융거래정보의 보고 및 이용 등에 관한 법률"],
+  [/자본시장법|자본시장과/, /자본시장과 금융투자업/, "자본시장과 금융투자업에 관한 법률"],
+  [/가상자산\s*(?:이용자\s*보호\s*)?법|이용자\s*보호법|가상자산\s*이용자/, /가상자산 이용자 보호/, "가상자산 이용자 보호 등에 관한 법률"],
+  [/전자증권|전자등록/, /전자등록/, "주식·사채 등의 전자등록에 관한 법률"],
+  [/MiCA/i, /crypto-assets|MiCA/i, ""],
+  [/GENIUS/i, /GENIUS|stablecoin/i, ""],
+  [/ADGM|FSRA|아부다비/i, /FSRA|ADGM/, ""],
+  [/VARA|두바이/i, /VARA|Virtual Asset/i, ""],
+];
+// 한국 조문은 2글자 조각 검색이라 '등록'·'자산' 같은 조각만 겹쳐도 올라온다.
+// 질문의 핵심어(3글자 이상 단어, 조사 제거)나 확장 키워드 중 하나는 본문에 그대로 있어야 근거로 인정한다.
+const JOSA = /(에서는|으로는|에서|으로|에게|까지|부터|이란|란|상의|상|은|는|이|가|을|를|의|에|과|와|로|도|만|시)$/;
+function keyWords(q, ko){
+  const ws = new Set();
+  for(const w of String(q).match(/[가-힣A-Za-z0-9]+/g) || []){ const x = w.replace(JOSA, ""); if(/[가-힣]/.test(x) && x.length >= 3 && !QSTOP.has(x) && !/^(알려|무엇|어떻|설명|정리|내용|관련|기준|요건|의무|규정|조항|사항)/.test(x)) ws.add(x); }
+  for(const w of ko || []){ const x = String(w).replace(/\s+/g, ""); if(/[가-힣]/.test(x) && x.length >= 3) ws.add(x); }
+  return [...ws];
+}
+const QSTOP = new Set(["무엇","엇인","어떻","떻게","인가","있나","알려","려줘","해줘","관련","련된","대해","해서","하는","에서","으로","있는","경우","는지","인지","되나","되는","이란","가요","나요","어요","까요","는가","합니","니까","뭐야","어떤","떤게","해야","야하","하나","나요","요건은","의무는","무는","건은","란무","요?"]);
+const scopeOf = q => JUR.filter(([,re]) => re.test(q)).map(([c]) => c);
+function retrieve(q, kw={}, {filter, k=8}={}){
+  q = String(q||"");
+  const ko = (kw.ko||[]).join(" "), en = (kw.en||[]).join(" ");
+  const scope = scopeOf(q), named = LAWALIAS.filter(([re]) => re.test(q)), laws = named.map(([,t]) => t);
+  // 법령 이름(자본시장법 등)은 다른 법에도 인용되므로 핵심어에서 뺀다 — 이름은 문서 가중치로만 쓴다
+  const keys = keyWords(q, kw.ko).filter(w => !LAWALIAS.some(([re]) => re.test(w)) && !/법$|법률$|시행령$/.test(w));
+  const hasKey = a => !keys.length || keys.some(w => (a.label + a.text).replace(/\s+/g, "").includes(w));
+  const mult = a => { const d = docOf(a.docId)||{}; let m = 1; if(laws.some(t => t.test(d.title||""))) m *= 1.7; if(d.origin === "law.go.kr API") m *= 1.1; return m; };
+  const pool = (countries, query, n) => {
+    if(n <= 0 || !countries.length) return [];
+    const kr = countries.length === 1 && countries[0] === "한국";
+    // UAE 안에서도 ADGM(아부다비)과 VARA(두바이)는 다른 감독기관이므로, 한쪽만 물으면 다른 쪽은 뺀다
+    const adgm = /ADGM|FSRA|아부다비/i.test(q), vara = /VARA|두바이|Dubai/i.test(q);
+    const uaeOk = d => d.country !== "UAE" || adgm === vara || (adgm ? /ADGM|FSRA/.test((d.agency||"")+(d.title||"")) : !/ADGM|FSRA/.test((d.agency||"")+(d.title||"")));
+    const hs = search(query, { stop:QSTOP, k:n*4, filter: a => { if(filter && !filter(a)) return false; const d = docOf(a.docId); return !!d && countries.includes(d.country) && uaeOk(d) && (!kr || hasKey(a) || laws.some(t => t.test(d.title||""))); } })
+      .map(h => ({ ...h, s: h.s * mult(h.a) })).sort((x,y) => y.s - x.s);
+    const top = hs[0]?.s || 0;
+    return hs.filter(h => h.s >= top * 0.45).slice(0, n);
+  };
+  const foreignC = [...new Set(S.docs.map(d => d.country))].filter(c => c !== "한국");
+  let hits;
+  if(scope.length){
+    const fr = scope.filter(c => c !== "한국");
+    const kr = scope.includes("한국") ? pool(["한국"], `${q} ${ko}`, fr.length ? Math.ceil(k/2) : k) : [];
+    hits = [...kr, ...pool(fr, `${q} ${en}`, k - kr.length)];
+  } else if(/스테이블\s*코인|stablecoin|해외|국가별|각국|비교/i.test(q)){
+    // 관할을 안 밝혔지만 해외 규정이 주제인 질문: 국내·해외를 반씩
+    const kr = pool(["한국"], `${q} ${ko}`, Math.ceil(k/2));
+    hits = [...kr, ...pool(foreignC, `${q} ${en}`, k - kr.length)];
+  } else {
+    // 관할을 안 밝힌 한국어 질문은 국내 법령 우선. 국내 근거가 거의 없을 때만 해외로 채운다.
+    const kr = pool(["한국"], `${q} ${ko}`, k);
+    hits = kr.length >= 3 ? kr : [...kr, ...pool(foreignC, `${q} ${en}`, k - kr.length)];
+  }
+  if(!hits.length && !keys.length) hits = search(`${q} ${ko} ${en}`, { filter, k, stop:QSTOP });
+  // 질문에 나온 법령이 등록돼 있지 않으면 알려 준다 (국가법령정보 API로 가져오도록)
+  hits.missing = named.filter(([,t,name]) => name && !S.docs.some(d => t.test(d.title||""))).map(([,,name]) => name);
+  return hits;
+}
 const isDead = d => /철회|폐지|효력 ?상실/.test((d.note||"")+(d.title||"")) && /\[(철회|폐지)/.test(d.title||"");
 const noteTag = d => d.note ? `<div style="font-size:12px" class="${isDead(d)?"bad":"muted"}">${isDead(d)?"⚠ ":""}${esc(d.note)}</div>` : "";
 
@@ -748,10 +821,11 @@ async function runAsk(q){
     // 2) retrieval
     setStep("retrieve","run");
     const query = [q, ...(kw.ko||[]), ...(kw.en||[])].join(" ");
-    const hits = search(query, { filter, k:8 });
+    const hits = retrieve(q, kw, { filter, k:8 });
     lastHits = hits;
     setStep("retrieve","done");
-    if(!hits.length){ setStep("answer",null); showNoBasis(q, "검색 범위 안에서 질문과 겹치는 조문을 찾지 못했습니다."); return; }
+    if(hits.missing?.length){ note.hidden = false; note.innerHTML = `<b>질문에 나온 ${hits.missing.map(esc).join(", ")}이(가) 등록 문서에 없습니다.</b> <a href="#docs">문서 관리 → 국가법령정보 API에서 가져오기</a>로 현행본을 받은 뒤 다시 질문하면 정확한 근거로 답합니다.`; }
+    if(!hits.length){ setStep("answer",null); showNoBasis(q, hits.missing?.length ? `${hits.missing.join(", ")}이(가) 등록되어 있지 않습니다. 문서 관리에서 국가법령정보 API로 가져오세요.` : "검색 범위 안에서 질문과 겹치는 조문을 찾지 못했습니다."); return; }
     renderCards(hits, new Set());
     // 3) grounded answer, streamed
     setStep("answer","run");
@@ -906,7 +980,12 @@ async function sendChat(text){
     // 2) retrieve, keep earlier cited articles pinned
     bot.step = "조문 찾는 중"; paintBot(bi);
     const q = [rq.standalone||text, ...(rq.ko||[]), ...(rq.en||[])].join(" ");
-    const fresh = search(q, { filter, k:7 }).map(h=>h.a);
+    // 후속 질문("그럼 거기서는?")이 관할을 밝히지 않으면 앞 질문의 관할(ADGM·미국 등)을 이어받는다
+    let rqText = `${rq.standalone||text} ${scopeOf(rq.standalone||"").length ? "" : text}`;
+    if(!scopeOf(rqText).length && (/그럼|거기|그곳|그쪽|해당|여기|이 경우|같은|추가로|그 밖|그밖|또는\?|은\?$|는\?$/.test(text) || text.length < 20)){
+      for(let i=C.turns.length-3;i>=0;i--){ const t=C.turns[i]; if(t.role!=="user") continue; const m = JUR.map(([,re])=>(t.content.match(re)||[])[0]).filter(Boolean); if(m.length){ rqText += " " + m.join(" "); break; } }
+    }
+    const fresh = retrieve(rqText, rq, { filter, k:7 }).map(h=>h.a);
     const pinned = []; for(let i=C.turns.length-1;i>=0 && pinned.length<6;i--){ for(const id of (C.turns[i].cited||[])){ if(!pinned.includes(id)) pinned.push(id); } }
     const ctxArts = []; for(const a of [...fresh, ...pinned.map(artById).filter(Boolean)]){ if(!ctxArts.some(x=>x.id===a.id)) ctxArts.push(a); if(ctxArts.length>=11) break; }
     if(!ctxArts.length){ bot.content = "근거 없음\n검색 범위에서 이 질문과 겹치는 조문을 찾지 못했습니다. 국가 필터를 풀거나 표현을 바꿔 보세요."; bot.status="done"; return; }
@@ -1295,7 +1374,7 @@ async function runDraft(){
       kw = await callClaude({ step:"문서 작업 · 검색어 추출", json:true, tier:"quick", signal:ctl.signal,
         input:`사내 문서(${t.name}) 초안을 쓰기 위해 등록 법령(한국어 원문, 미국·EU·UAE 영어 원문)에서 근거 조문을 찾으려 한다.${t.kw ? " " + t.kw : ""}\n[작성 요청]\n${prompt}\n\n조문 본문에 실제로 나올 법령 용어로 한국어 키워드 최대 8개, 영어 규제 용어 최대 8개를 골라라.\nJSON만: {"ko":["…"],"en":["…"]}` }) || kw;
     }catch(e){ if(e.code==="cancelled") throw e; }
-    const fresh = search([prompt, ...(kw.ko||[]), ...(kw.en||[])].join(" "), { filter, k }).map(h=>h.a);
+    const fresh = retrieve(prompt, kw, { filter, k }).map(h=>h.a);
     const ctx = []; for(const a of [...seeds.filter(filter), ...fresh]){ if(!ctx.some(x=>x.id===a.id)) ctx.push(a); if(ctx.length>=cap) break; }
     dStep("search","done");
     if(!ctx.length){ dStep("write","err"); note.hidden = false; note.textContent = "근거 범위에서 요청과 겹치는 조문을 찾지 못했습니다. 국가 범위를 넓히거나 요청을 더 구체적으로 써 보세요."; return; }

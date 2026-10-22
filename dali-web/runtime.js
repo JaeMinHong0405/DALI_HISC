@@ -135,10 +135,46 @@
     if (!res.ok) throw geminiError(res.status, await res.json().catch(() => ({})));
     return res;
   }
+  /* 속도: Gemini 3.x Flash는 기본으로 '생각(thinking)'을 중간 수준까지 한 뒤 답을 쓰기 때문에 첫 글자까지 수십 초가 걸린다.
+     근거 조문을 주고 정리만 시키는 작업이므로 생각 수준을 낮춘다. 모델이 이 설정을 받지 않으면 한 번만 빼고 다시 보낸다. */
+  const noThink = new Set();
+  function thinking(model) {
+    if (noThink.has(model)) return null;
+    if (/gemini-2\.5-pro/.test(model)) return { thinkingBudget: 128 };
+    if (/gemini-2\.5/.test(model)) return { thinkingBudget: 0 };
+    if (/gemini-(3|4)/.test(model)) return { thinkingLevel: "low" };
+    return null;
+  }
+  async function geminiCall(model, method, body, signal) {
+    const tc = thinking(model);
+    const withTc = tc ? { ...body, generationConfig: { ...body.generationConfig, thinkingConfig: tc } } : body;
+    try { return await geminiFetch(`models/${encodeURIComponent(model)}:${method}`, withTc, signal); }
+    catch (e) {
+      if (tc && e.code === "bad_request" && /think/i.test(e.message || "")) { noThink.add(model); return geminiFetch(`models/${encodeURIComponent(model)}:${method}`, body, signal); }
+      throw e;
+    }
+  }
+  // 검색어 확장·질문 재작성(quick)은 더 가벼운 Flash-Lite 모델이 있으면 그쪽으로 보낸다.
+  let quickModel = null;
+  async function geminiQuickModel() {
+    const g = gcfg();
+    if (quickModel && quickModel.base === g.model) return quickModel.id;
+    let id = g.model;
+    try {
+      const cached = JSON.parse(sessionStorage.getItem("dali.web.geminiModels") || "null");
+      const models = cached || await geminiModels(g.key);
+      if (!cached) try { sessionStorage.setItem("dali.web.geminiModels", JSON.stringify(models)); } catch {}
+      const fam = (g.model.match(/gemini-[\d.]+/) || [""])[0];
+      const lite = models.filter(m => /flash-lite/.test(m.id) && !/preview|exp|image/.test(m.id));
+      id = (lite.find(m => fam && m.id.startsWith(fam)) || lite.sort((a, b) => b.id.localeCompare(a.id))[0] || { id: g.model }).id;
+    } catch {}
+    quickModel = { base: g.model, id };
+    return id;
+  }
   const partsText = c => ((c && c.content && c.content.parts) || []).map(p => p.text || "").join("");
   async function geminiSample(input, opts) {
     const ctl = linkSignal(opts.signal), g = gcfg();
-    const res = await geminiFetch(`models/${encodeURIComponent(g.model)}:streamGenerateContent?alt=sse`,
+    const res = await geminiCall(g.model, "streamGenerateContent?alt=sse",
       { contents: [{ role: "user", parts: [{ text: input }] }], generationConfig: { maxOutputTokens: 8192, temperature: 0.2 } }, ctl.signal);
     let text = "", finish = "";
     try {
@@ -154,13 +190,30 @@
     return { text, truncated: finish === "MAX_TOKENS", modelTierApplied: g.model };
   }
   async function geminiJson(input, opts) {
-    const g = gcfg();
-    const res = await geminiFetch(`models/${encodeURIComponent(g.model)}:generateContent`,
-      { contents: [{ role: "user", parts: [{ text: input }] }], generationConfig: { responseMimeType: "application/json", maxOutputTokens: 2048, temperature: 0 } }, linkSignal(opts.signal).signal);
-    const j = await res.json();
-    const text = partsText((j.candidates || [])[0]);
-    opts.onText && opts.onText({ text });
-    return parseJson(text);
+    const g = gcfg(), quick = opts.modelTier !== "default";
+    const ctl = linkSignal(opts.signal);
+    const run = async () => {
+      const model = quick ? await geminiQuickModel() : g.model;
+      const res = await geminiCall(model, "generateContent",
+        { contents: [{ role: "user", parts: [{ text: input }] }], generationConfig: { responseMimeType: "application/json", maxOutputTokens: quick ? 1024 : 4096, temperature: 0 } }, ctl.signal);
+      const j = await res.json();
+      const text = partsText((j.candidates || [])[0]);
+      opts.onText && opts.onText({ text });
+      return parseJson(text);
+    };
+    if (!quick) return run();
+    // 검색어 확장이 6초 안에 안 오면 기다리지 않고 내장 용어집으로 확장한다 (답변은 그대로 Gemini가 작성).
+    let timer;
+    const fallback = new Promise(res => { timer = setTimeout(() => { ctl.abort(); res("timeout"); }, 6000); });
+    try {
+      const r = await Promise.race([run(), fallback]);
+      if (r !== "timeout") return r;
+    } catch (e) { if (opts.signal && opts.signal.aborted) throw err("cancelled"); if (e.code === "auth_error" || e.code === "rate_limited") throw e; }
+    finally { clearTimeout(timer); }
+    if (opts.signal && opts.signal.aborted) throw err("cancelled");
+    const local = window.DALI_MOCK.respond(input, true);
+    opts.onText && opts.onText({ text: "(Gemini 응답 지연 → 내장 용어집으로 검색어 확장)\n" + JSON.stringify(local, null, 2) });
+    return local;
   }
   async function geminiModels(key) {
     const res = await geminiFetch("models?pageSize=200", null, null, key);
@@ -343,7 +396,7 @@
         const keep = f.model.value;
         const chosen = models.some(m => m.id === keep) ? keep : (models.find(m => m.id === GEMINI_DEFAULT_MODEL) || models.find(m => /flash/.test(m.id) && !/lite|preview/.test(m.id)) || models[0]).id;
         f.model.innerHTML = models.map(m => `<option value="${esc(m.id)}"${m.id === chosen ? " selected" : ""}>${esc(m.id)}</option>`).join("");
-        const r = await geminiFetch(`models/${encodeURIComponent(chosen)}:generateContent`, { contents: [{ role: "user", parts: [{ text: "Reply with exactly: OK" }] }], generationConfig: { maxOutputTokens: 16, temperature: 0 } }, null, key);
+        const r = await geminiFetch(`models/${encodeURIComponent(chosen)}:generateContent`, { contents: [{ role: "user", parts: [{ text: "Reply with exactly: OK" }] }], generationConfig: { maxOutputTokens: 256, temperature: 0, ...(thinking(chosen) ? { thinkingConfig: thinking(chosen) } : {}) } }, null, key).catch(e => e.code === "bad_request" ? geminiFetch(`models/${encodeURIComponent(chosen)}:generateContent`, { contents: [{ role: "user", parts: [{ text: "Reply with exactly: OK" }] }], generationConfig: { maxOutputTokens: 256, temperature: 0 } }, null, key) : Promise.reject(e));
         const j = await r.json();
         msg.innerHTML = `<span class="ok">✓ 연결됨 · 모델 ${models.length}개 확인 · 테스트 응답 "${esc(partsText((j.candidates || [])[0]).trim().slice(0, 20))}"</span>`;
         return true;
@@ -360,7 +413,7 @@
         const key = f.key.value.trim() || g.key;
         if (!key) { msg.innerHTML = '<span class="bad">Gemini를 쓰려면 API 키를 입력하세요.</span>'; return; }
         if (f.key.value.trim() && !(await test())) return;
-        LS.set(K.gemini, { key, model: f.model.value || GEMINI_DEFAULT_MODEL });
+        LS.set(K.gemini, { key, model: f.model.value || GEMINI_DEFAULT_MODEL }); quickModel = null; try { sessionStorage.removeItem("dali.web.geminiModels"); } catch {}
       }
       LS.set(K.provider, p);
       paintMode(); close();
