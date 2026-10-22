@@ -1,7 +1,7 @@
 <title>DALI 규제 Q&amp;A</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
 <style>
@@ -283,11 +283,142 @@ label.f[hidden],.dmemo[hidden]{display:none}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 .spin{display:inline-block;width:10px;height:10px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-1px}
 @keyframes sp{to{transform:rotate(360deg)}}
+
+/* ===================================================================
+   Counsel theme — law-firm look: ink navy, brass, ivory paper, serif display.
+   Overrides the base styles above; tokens first, then components.
+   =================================================================== */
+:root{
+  --bg:#F6F4EF; --surface:#FFFFFF; --sunk:#EFECE5; --ink:#141B2B; --muted:#5E6573; --line:#DDD8CD;
+  --navy:#16233B; --navy-2:#22314D; --brass:#A3834A; --brass-2:#C2A46C; --brass-weak:#F3ECDF;
+  --accent:#16233B; --accent-ink:#F6F1E6; --accent-weak:#ECE7DC; --cite:#7A2F35; --cite-weak:#F4E6E4;
+  --ok:#2E6B4A; --warn:#8A5A12; --bad:#9F2A22; --hl:#F6E9C9;
+  --con-bg:#0E1626; --con-ink:#D9DCE3; --con-muted:#8A93A6; --con-line:#22304A;
+  --f-display:"Noto Serif KR","Cormorant Garamond","Apple Myungjo","Batang",serif;
+  --f-latin:"Cormorant Garamond","Noto Serif KR",Georgia,serif;
+  --r:3px; --head-h:64px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0D131F; --surface:#141C2B; --sunk:#1A2335; --ink:#E8E4DA; --muted:#A3A9B6; --line:#2A3449;
+  --navy:#0A101B; --navy-2:#1B2638; --brass:#C2A46C; --brass-2:#D9C08E; --brass-weak:#2A2617;
+  --accent:#C2A46C; --accent-ink:#121826; --accent-weak:#262B37; --cite:#E2A3A6; --cite-weak:#3A2228;
+  --ok:#6FC097; --warn:#E2B356; --bad:#F08A80; --hl:#3D3418;
+  --con-bg:#080D16; --con-ink:#D9DCE3; --con-muted:#7F889B; --con-line:#1E2A40; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D131F; --surface:#141C2B; --sunk:#1A2335; --ink:#E8E4DA; --muted:#A3A9B6; --line:#2A3449;
+  --navy:#0A101B; --navy-2:#1B2638; --brass:#C2A46C; --brass-2:#D9C08E; --brass-weak:#2A2617;
+  --accent:#C2A46C; --accent-ink:#121826; --accent-weak:#262B37; --cite:#E2A3A6; --cite-weak:#3A2228;
+  --ok:#6FC097; --warn:#E2B356; --bad:#F08A80; --hl:#3D3418;
+  --con-bg:#080D16; --con-ink:#D9DCE3; --con-muted:#7F889B; --con-line:#1E2A40; color-scheme:dark}
+body{font-size:15px;letter-spacing:-.003em}
+body::before{background:var(--navy)}
+::selection{background:var(--hl)}
+:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+
+/* masthead */
+header.top{background:var(--navy);border-bottom:0;box-shadow:inset 0 -1px 0 var(--brass)}
+.topin{min-height:var(--head-h);padding-block:8px;gap:22px}
+.brand{align-items:center;gap:12px;margin-right:6px}
+.brand b{font-family:var(--f-latin);font-size:28px;font-weight:600;letter-spacing:.16em;color:#F6F1E6;line-height:1}
+.brand .bsub{display:flex;flex-direction:column;line-height:1.25;padding-left:12px;border-left:1px solid rgba(194,164,108,.55)}
+.brand .bsub em{font-family:var(--f-latin);font-style:italic;font-size:14px;color:var(--brass-2);letter-spacing:.02em}
+.brand .bsub small{font-size:11px;color:#B9BDC7;letter-spacing:.06em}
+nav.tabs{gap:4px}
+nav.tabs a{color:#C9CDD6;border-radius:0;padding:8px 12px;font-size:14px;letter-spacing:.02em;border-bottom:2px solid transparent}
+nav.tabs a:hover{background:transparent;color:#FFFFFF;border-bottom-color:rgba(194,164,108,.5)}
+nav.tabs a[aria-current="page"]{background:transparent;color:#FFFFFF;border-bottom-color:var(--brass-2)}
+header.top .pill{border-color:rgba(255,255,255,.18);color:#C9CDD6;background:rgba(255,255,255,.04)}
+header.top .btn-con{background:transparent;color:#E7E2D6;border:1px solid rgba(194,164,108,.6);border-radius:var(--r);letter-spacing:.03em}
+header.top .btn-con:hover{background:rgba(194,164,108,.14)}
+aside.console{top:calc(env(safe-area-inset-top,0px) + var(--head-h));height:calc(100vh - var(--head-h) - env(safe-area-inset-top,0px))}
+
+/* page typography */
+main{padding-block:36px 72px}
+.page{gap:22px}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:var(--f-latin);font-size:13px;font-weight:600;letter-spacing:.2em;color:var(--brass);text-transform:uppercase}
+.eyebrow::before{content:"";width:28px;height:1px;background:var(--brass)}
+.page h1{font-family:var(--f-display);font-weight:600;font-size:30px!important;letter-spacing:-.01em;color:var(--ink);margin-top:6px!important}
+.page h2{font-family:var(--f-display);font-weight:600;letter-spacing:-.005em}
+.lede{font-size:15px;line-height:1.75;max-width:66ch}
+.hero{display:flex;flex-direction:column;gap:10px;padding:8px 0 6px;border-bottom:1px solid var(--line);padding-bottom:22px}
+.hero h1{font-size:36px!important;line-height:1.25}
+
+/* surfaces */
+.panel{border-radius:var(--r);border-color:var(--line);box-shadow:0 1px 0 rgba(20,27,43,.03);padding:22px}
+.panel > h2:first-child,.panel .row > h2{font-size:17px!important}
+.notice{border-style:solid;border-left:0;border-radius:var(--r);background:var(--brass-weak);border-color:#E5DAC3;color:var(--ink)}
+.btn{border-radius:var(--r);letter-spacing:.02em;border-color:#CFC8B8}
+.btn:hover{background:var(--sunk)}
+.btn.primary{background:var(--navy);border-color:var(--navy);color:#F6F1E6}
+.btn.primary:hover{filter:none;background:var(--navy-2);box-shadow:inset 0 -2px 0 var(--brass-2)}
+input[type=text],input[type=url],input[type=date],select,textarea{border-radius:var(--r);border-color:#D6D0C3;background:var(--surface)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brass);box-shadow:0 0 0 3px rgba(163,131,74,.15)}
+.chip{border-radius:var(--r);border-color:#D6D0C3;background:var(--surface);font-size:13px}
+.chip:hover{border-color:var(--brass);background:var(--brass-weak)}
+label.f{letter-spacing:.02em}
+
+/* figures */
+.stats{gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.stat{border-left:1px solid var(--line);padding:14px 18px}
+.stat:first-child{border-left:0}
+.stat .n{font-family:var(--f-latin);font-size:38px;font-weight:600;line-height:1.05;color:var(--navy)}
+.stat .l{letter-spacing:.06em;text-transform:uppercase;font-size:11.5px;margin-top:4px}
+
+/* pipeline + answer */
+.step{border-radius:var(--r);background:transparent;border:1px solid var(--line);letter-spacing:.02em}
+.step.run{background:var(--brass-weak);border-color:var(--brass);color:var(--ink)}
+.step.done{border-color:#BFD5C8}
+.answer{font-size:15.5px;line-height:1.8}
+.answer h3{font-family:var(--f-display);font-size:16px;letter-spacing:0;color:var(--navy);text-transform:none;padding-bottom:6px;border-bottom:1px solid var(--line);margin:22px 0 10px}
+.cite{border-radius:2px;background:var(--cite-weak);color:var(--cite);font-family:var(--f-mono)}
+.card{border-radius:var(--r);padding:18px 20px}
+.card.cited{border-color:var(--brass);box-shadow:inset 0 2px 0 var(--brass)}
+.card .id{color:var(--cite)}
+.card .lab{font-family:var(--f-display);font-size:15px}
+.tag{border-radius:2px;background:var(--sunk);letter-spacing:.02em}
+.law{font-size:14.5px;line-height:1.9;color:#1E2433}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .law{color:var(--ink)}}
+
+/* source viewer + tables */
+.toc button.cur{background:var(--hl)}
+.art h4{font-size:16px}
+th{font-family:var(--f-latin);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--brass);border-bottom:1px solid var(--ink)}
+td{border-bottom-color:var(--line)}
+
+/* chat pop-up */
+.cw-fab{background:var(--navy);color:#F6F1E6;box-shadow:0 10px 28px rgba(14,22,38,.35),inset 0 0 0 2px var(--brass-2)}
+.cw{border-radius:6px;border-color:var(--line);box-shadow:0 24px 64px rgba(14,22,38,.28)}
+.cw-head{background:var(--navy);color:#F6F1E6;border-bottom:1px solid var(--brass)}
+.cw-head .sub{color:#B9BDC7}
+.cw-head b{font-family:var(--f-display);font-weight:600}
+.cw-head select{background:rgba(255,255,255,.06);color:#F6F1E6;border-color:rgba(255,255,255,.2)}
+.cw-head .icb{color:#C9CDD6}
+.cw-head .icb:hover{border-color:rgba(194,164,108,.6);color:#fff}
+.msg.user .bubble{background:var(--navy);color:#F6F1E6;border-color:var(--navy);border-radius:10px 10px 2px 10px}
+.msg.bot .bubble{border-radius:2px 10px 10px 10px}
+.msg .who{font-family:var(--f-latin);letter-spacing:.14em;text-transform:uppercase;font-size:11px}
+
+/* drafting */
+.dlabel{color:var(--brass);border-color:var(--brass);border-radius:2px}
+.dtype{border-radius:var(--r)}
+.dtype[aria-checked="true"]{border-color:var(--navy);background:var(--brass-weak);box-shadow:inset 0 0 0 1px var(--navy)}
+.paperwrap{background:var(--sunk);border-radius:var(--r)}
+.chk input{accent-color:var(--navy)}
+.ask .btn{white-space:nowrap;flex:none}
+.stats{grid-template-columns:repeat(auto-fit,minmax(118px,1fr))}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  .btn.primary{background:var(--brass);border-color:var(--brass);color:#121826}
+  .btn.primary:hover{background:var(--brass-2);box-shadow:none}
+  .stat .n{color:var(--brass-2)}
+  .dtype[aria-checked="true"]{border-color:var(--brass);box-shadow:inset 0 0 0 1px var(--brass)}
+  .msg.user .bubble{background:var(--navy-2);border-color:var(--line)}}}
+:root[data-theme="dark"] .btn.primary{background:var(--brass);border-color:var(--brass);color:#121826}
+:root[data-theme="dark"] .stat .n{color:var(--brass-2)}
 </style>
 
 <header class="top">
   <div class="wrap topin">
-    <div class="brand"><b>DA<i>LI</i></b><span>디지털 자산 규제 Q&amp;A · PoC</span></div>
+    <div class="brand"><b>DALI</b><span class="bsub"><em>Digital Asset Law Intelligence</em><small>디지털 자산 규제 검토 · PoC</small></span></div>
     <nav class="tabs" aria-label="페이지">
       <a href="#home" data-tab="home">홈</a>
       <a href="#ask" data-tab="ask">질문·답변</a>
@@ -309,9 +440,9 @@ label.f[hidden],.dmemo[hidden]{display:none}
 
 <!-- HOME -->
 <section class="page" data-page="home">
-  <div style="display:flex;flex-direction:column;gap:8px">
-    <span class="eyebrow">미래전략실 · 규제 검토</span>
-    <h1 style="font-size:28px">등록된 원문만 근거로 답합니다</h1>
+  <div class="hero">
+    <span class="eyebrow">미래전략실 · Regulatory Review</span>
+    <h1>등록된 원문만 근거로 답합니다</h1>
     <p class="lede">질문하면 등록 문서에서 관련 조문을 찾고, Claude가 그 조문만 인용해 요약합니다. 근거가 없으면 추측하지 않고 "근거 없음"으로 답합니다.</p>
   </div>
   <div class="panel" style="display:flex;flex-direction:column;gap:12px">
