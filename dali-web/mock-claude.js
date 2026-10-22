@@ -119,15 +119,16 @@
     const q = between(input, "질문: ", /\n\n\[근거 조문\]/);
     const ts = [...terms(q), ...expand(q).ko, ...expand(q).en];
     const r = ranked(articles(input), ts, q);
-    if (!r.length || r[0].score <= 0) return `근거 없음\n데모 모드에서 질문과 겹치는 조문 문장을 찾지 못했습니다. 다른 표현으로 물어보거나 실제 Claude 연결 후 다시 확인하세요.`;
+    if (!r.length || r[0].score <= 0) return `근거 없음\n데모 모드에서 질문과 겹치는 조문 문장을 찾지 못했습니다. 다른 표현으로 물어보거나 AI 설정에서 Gemini를 연결한 뒤 다시 확인하세요.`;
     const top = r.filter(x => x.score > 0);
     return [
       "## 요약",
+      "- ⚠ 지금은 **데모 모드**라 AI 해설 없이 관련 조문 문장만 발췌해 보여 드립니다. 해설·정리된 답변은 오른쪽 위 **AI 설정**에서 Gemini 키를 넣으면 나옵니다.",
       ...top.slice(0, 3).map(x => `- ${x.a.label}${tag(x.a)}: "${x.s}" ${cite(x.a)}`),
       "## 세부 내용",
       ...top.slice(0, 6).map(x => `- **${x.a.title}** ${x.a.label} — "${best(x.a, ts, new Set([x.s.replace(/…$/, "")])).s}" ${cite(x.a)}`),
       "## 확인 필요",
-      "- 데모 모드 응답은 AI 해석이 아닌 원문 발췌이므로, 해석과 적용 여부는 실제 Claude 연결 후 확인 필요",
+      "- 데모 모드 응답은 AI 해석이 아닌 원문 발췌이므로, 해석과 적용 여부는 AI(Gemini) 연결 후 확인 필요",
     ].join("\n");
   }
 
@@ -157,7 +158,7 @@
       if (!r.length) rows.push({ country, status: "해당 규정 없음", summary: "검색된 조문에서 이 쟁점과 겹치는 문장을 찾지 못했습니다.", cites: [] });
       else rows.push({ country, status: "규정 있음", summary: `(원문 발췌) ${r[0].a.label}: "${clip(r[0].s, 160)}"`, cites: r.slice(0, 2).map(x => x.a.id) });
     }
-    return { rows, diff: ["데모 모드: 국가별 핵심 조문 문장을 발췌해 나란히 보여 줍니다. 차이 분석은 실제 Claude 연결 시 제공됩니다."] };
+    return { rows, diff: ["데모 모드: 국가별 핵심 조문 문장을 발췌해 나란히 보여 줍니다. 차이 분석은 AI 설정에서 Gemini를 연결하면 제공됩니다."] };
   }
 
   /* ---------- 4) document drafts ---------- */
@@ -297,7 +298,7 @@
     }
     if (lang === "ko") out[0] = "# 상호 비밀유지계약서";
     out.push("## 검토 메모",
-      "- 데모 모드 초안: 표준 NDA 조항 틀에 검색된 규제 근거를 연결한 것이며, 실제 Claude 연결 시 요청 맥락에 맞춘 초안이 생성됨",
+      "- 데모 모드 초안: 표준 NDA 조항 틀에 검색된 규제 근거를 연결한 것이며, AI(Gemini) 연결 시 요청 맥락에 맞춘 초안이 생성됨",
       ...(reg.length ? reg.map(x => `- 반영 근거: ${x.a.title} ${x.a.label} ${cite(x.a)}`) : ["- 반영할 규제 근거를 찾지 못함 — 추가 원문 필요"]),
       "- 당사자 정보, 계약일, 기간, 준거법·관할은 〔확인 필요〕 — 법무 검토 필수");
     return out.join("\n");
